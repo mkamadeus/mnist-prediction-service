@@ -1,51 +1,35 @@
-from fastapi import FastAPI
+from typing import List
+from fastapi import FastAPI, UploadFile
+from keras.models import load_model
 from pydantic import BaseModel
-import joblib
-import onnxruntime as rt
 import numpy as np
 
 app = FastAPI()
 
 # from model spec
-sess = rt.InferenceSession("titanic.onnx")
-
-# from input spec
-class Input(BaseModel):
-	pclass : float
-	sibsp : float
-	parch : float
-	age : float
-	sex : str
-	embarked : str
+model = load_model("mnist.h5")
 
 # from output spec
 class Output(BaseModel):
-	prediction : float
+	prediction : List[float]
 
 @app.post('/')
-async def root(body : Input):
-	input_name = sess.get_inputs()[0].name
-	label_name = sess.get_outputs()[0].name
-	
-	# from pipeline & input spec
-	
+async def root(file : UploadFile): # from input spec		
 	# ---- BEGIN ----
-	# normal
-	p_1 = np.array([[body.pclass, body.sibsp, body.parch]], dtype=np.float32)
-
-	# scaled
-	scaler = joblib.load('age.scaler')
-	p_2 = scaler.transform(np.array([[body.age]], dtype=np.float32))
-
-	# encoded
-	p_3 = np.array([[1 if body.sex == "M" else 0, 1 if body.sex == "F" else 0]], dtype=np.float32)
-	p_4 = np.array([[1 if body.sex == "C" else 0, 1 if body.sex == "Q" else 0, 1 if body.sex == "S" else 0]], dtype=np.float32)
+	contents = await file.read()
 	
-	p_final = np.concatenate((p_1, p_2, p_3, p_4), axis=1)
-	
+	# resize
+	import io
+	from PIL import Image
+	stream = io.BytesIO(contents)
+	img = Image.open(stream)
+	img = img.resize((32,32))
+
+	result = np.array(img).reshape((1,32,32,1))
+	print(result.shape)
 	# ---- END ----
-
-	prediction = sess.run([label_name], {input_name: p_final})[0]
-	print(p_final)
-
-	return Output(prediction=prediction)
+	
+	prediction = model.predict(x=result)
+	print(prediction)
+	
+	return Output(prediction=prediction.tolist()[0])
