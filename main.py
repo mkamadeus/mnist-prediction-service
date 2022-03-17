@@ -15,21 +15,23 @@ class Output(BaseModel):
 
 @app.post('/')
 async def root(file : UploadFile): # from input spec		
-	# ---- BEGIN ----
 	contents = await file.read()
 	
-	# resize
+	# pipelines
+	# ---- BEGIN ----
+	# resize image
 	import io
 	from PIL import Image
 	stream = io.BytesIO(contents)
 	img = Image.open(stream)
 	img = img.resize((32,32))
 
+	# reshape image to input
 	result = np.array(img).reshape((1,32,32,1))
 	print(result.shape)
 	# ---- END ----
 	
-	prediction = model.predict(x=result)
-	print(prediction)
+	# model prediction
+	prediction = model.predict(x=result).tolist()[0]
 	
-	return Output(prediction=prediction.tolist()[0])
+	return Output(prediction=prediction)
